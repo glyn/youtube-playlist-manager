@@ -41,11 +41,18 @@ async fn async_main() -> Result<()> {
     );
 
     let result = hub
-        .videos()
+        .playlists()
         .list(&vec!["contentDetails".into()])
-        .chart("mostPopular")
+        .add_id("PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC") // "Christ Church Winchester | Church Online Catch Up"
         .doit()
         .await;
+
+    // let result = hub
+    // .videos()
+    // .list(&vec!["contentDetails".into()])
+    // .chart("mostPopular")
+    // .doit()
+    // .await;
 
     match result {
         Err(e) => match e {
@@ -62,7 +69,21 @@ async fn async_main() -> Result<()> {
             | Error::FieldClash(_)
             | Error::JsonDecodeError(_, _) => println!("{}", e),
         },
-        Ok(res) => println!("Success: {:?}", res),
+        Ok((_, res)) => {
+            println!("Success: {:?}", res);
+            match res.items {
+                Some(items) => println!(
+                    "Playlist items: {:?}",
+                    items[0]
+                        .content_details
+                        .as_ref()
+                        .unwrap()
+                        .item_count
+                        .unwrap()
+                ),
+                None => (),
+            }
+        }
     }
     Ok(())
 }
