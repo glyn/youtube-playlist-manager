@@ -41,18 +41,11 @@ async fn async_main() -> Result<()> {
     );
 
     let result = hub
-        .playlists()
-        .list(&vec!["contentDetails".into()])
-        .add_id("PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC") // "Christ Church Winchester | Church Online Catch Up"
+        .playlist_items()
+        .list(&vec!["snippet".into()])
+        .playlist_id("PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC") // "Christ Church Winchester | Church Online Catch Up"
         .doit()
         .await;
-
-    // let result = hub
-    // .videos()
-    // .list(&vec!["contentDetails".into()])
-    // .chart("mostPopular")
-    // .doit()
-    // .await;
 
     match result {
         Err(e) => match e {
@@ -69,19 +62,29 @@ async fn async_main() -> Result<()> {
             | Error::FieldClash(_)
             | Error::JsonDecodeError(_, _) => println!("{}", e),
         },
-        Ok((_, res)) => {
-            println!("Success: {:?}", res);
-            match res.items {
-                Some(items) => println!(
-                    "Playlist items: {:?}",
-                    items[0]
-                        .content_details
-                        .as_ref()
-                        .unwrap()
-                        .item_count
-                        .unwrap()
-                ),
-                None => (),
+        Ok((_, mut res)) => {
+            //println!("Success: {:?}", res);
+            while res.next_page_token.is_some() {
+                match &res.items {
+                    Some(items) => {
+                        for item in items {
+                            println!("{}", item.snippet.as_ref().unwrap().title.as_ref().unwrap());
+                        }
+                    }
+                    None => (),
+                }
+
+                let result = hub
+                    .playlist_items()
+                    .list(&vec!["snippet".into()])
+                    .playlist_id("PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC") // "Christ Church Winchester | Church Online Catch Up"
+                    .page_token(res.next_page_token.as_ref().unwrap())
+                    .doit()
+                    .await;
+                match result {
+                    Err(e) => println!("{}", e),
+                    Ok((_, next_res)) => res = next_res,
+                }
             }
         }
     }
