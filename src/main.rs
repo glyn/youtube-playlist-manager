@@ -4,8 +4,7 @@ extern crate hyper_rustls;
 extern crate yup_oauth2 as oauth2;
 use std::env;
 use tokio;
-use youtube3::YouTube;
-use youtube3::{Error, Result};
+use youtube3::{Result, YouTube};
 
 fn main() -> Result<()> {
     tokio::runtime::Builder::new_current_thread()
@@ -42,33 +41,78 @@ async fn async_main() -> Result<()> {
 
     let result = hub
         .playlist_items()
-        .list(&vec!["snippet".into()])
+        .list(&vec![
+            "snippet".into(),
+            "id".into(),
+            "contentDetails".into(),
+        ])
         .playlist_id("PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC") // "Christ Church Winchester | Church Online Catch Up"
         .doit()
         .await;
 
     match result {
-        Err(e) => match e {
-            // The Error enum provides details about what exactly happened.
-            // You can also just use its `Debug`, `Display` or `Error` traits
-            Error::HttpError(_)
-            | Error::Io(_)
-            | Error::MissingAPIKey
-            | Error::MissingToken(_)
-            | Error::Cancelled
-            | Error::UploadSizeLimitExceeded(_, _)
-            | Error::Failure(_)
-            | Error::BadRequest(_)
-            | Error::FieldClash(_)
-            | Error::JsonDecodeError(_, _) => println!("{}", e),
-        },
+        Err(e) => println!("{}", e),
         Ok((_, mut res)) => {
-            //println!("Success: {:?}", res);
             while res.next_page_token.is_some() {
                 match &res.items {
                     Some(items) => {
                         for item in items {
-                            println!("{}", item.snippet.as_ref().unwrap().title.as_ref().unwrap());
+                            let video = hub
+                                .videos()
+                                .list(&vec!["liveStreamingDetails".into()])
+                                .add_id(
+                                    item.content_details
+                                        .as_ref()
+                                        .unwrap()
+                                        .video_id
+                                        .as_ref()
+                                        .unwrap(),
+                                )
+                                .doit()
+                                .await;
+                            match video {
+                                Err(e) => println!("{}", e),
+                                Ok((_, v)) => {
+                                    let items = v.items.unwrap();
+                                    {
+                                        let live_streaming_details =
+                                            items.get(0).unwrap().live_streaming_details.as_ref();
+                                        if live_streaming_details.is_some()
+                                            && live_streaming_details
+                                                .unwrap()
+                                                .actual_start_time
+                                                .is_some()
+                                        {
+                                            let actual_start_time = live_streaming_details
+                                                .unwrap()
+                                                .actual_start_time
+                                                .as_ref()
+                                                .unwrap();
+
+                                            println!(
+                                                "{}:{}",
+                                                item.snippet
+                                                    .as_ref()
+                                                    .unwrap()
+                                                    .title
+                                                    .as_ref()
+                                                    .unwrap(),
+                                                actual_start_time
+                                            )
+                                        } else {
+                                            println!(
+                                                "{}:future",
+                                                item.snippet
+                                                    .as_ref()
+                                                    .unwrap()
+                                                    .title
+                                                    .as_ref()
+                                                    .unwrap()
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     None => (),
@@ -76,7 +120,11 @@ async fn async_main() -> Result<()> {
 
                 let result = hub
                     .playlist_items()
-                    .list(&vec!["snippet".into()])
+                    .list(&vec![
+                        "snippet".into(),
+                        "id".into(),
+                        "contentDetails".into(),
+                    ])
                     .playlist_id("PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC") // "Christ Church Winchester | Church Online Catch Up"
                     .page_token(res.next_page_token.as_ref().unwrap())
                     .doit()
