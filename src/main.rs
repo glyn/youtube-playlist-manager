@@ -6,6 +6,8 @@ use std::env;
 use tokio;
 use youtube3::{Result, YouTube};
 
+const PLAYLIST: &str = "PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC"; // "Christ Church Winchester | Church Online Catch Up"
+
 fn main() -> Result<()> {
     tokio::runtime::Builder::new_current_thread()
         .enable_io()
@@ -39,16 +41,7 @@ async fn async_main() -> Result<()> {
         authenticator,
     );
 
-    let result = hub
-        .playlist_items()
-        .list(&vec![
-            "snippet".into(),
-            "id".into(),
-            "contentDetails".into(),
-        ])
-        .playlist_id("PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC") // "Christ Church Winchester | Church Online Catch Up"
-        .doit()
-        .await;
+    let result = playlist_items(&hub, PLAYLIST, &None).await;
 
     match result {
         Err(e) => println!("{}", e),
@@ -118,17 +111,8 @@ async fn async_main() -> Result<()> {
                     None => (),
                 }
 
-                let result = hub
-                    .playlist_items()
-                    .list(&vec![
-                        "snippet".into(),
-                        "id".into(),
-                        "contentDetails".into(),
-                    ])
-                    .playlist_id("PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC") // "Christ Church Winchester | Church Online Catch Up"
-                    .page_token(res.next_page_token.as_ref().unwrap())
-                    .doit()
-                    .await;
+                let result = playlist_items(&hub, PLAYLIST, &res.next_page_token).await;
+
                 match result {
                     Err(e) => println!("{}", e),
                     Ok((_, next_res)) => res = next_res,
@@ -137,4 +121,26 @@ async fn async_main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+async fn playlist_items(
+    hub: &youtube3::YouTube,
+    playlist_id: &str,
+    next_page_token: &Option<String>,
+) -> youtube3::client::Result<(
+    hyper::Response<hyper::body::Body>,
+    youtube3::api::PlaylistItemListResponse,
+)> {
+    let mut req = hub
+        .playlist_items()
+        .list(&vec![
+            "snippet".into(),
+            "id".into(),
+            "contentDetails".into(),
+        ])
+        .playlist_id(playlist_id);
+    if let Some(next) = next_page_token {
+        req = req.page_token(&next);
+    }
+    req.doit().await
 }
