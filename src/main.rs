@@ -2,6 +2,9 @@ extern crate google_youtube3 as youtube3;
 extern crate hyper;
 extern crate hyper_rustls;
 extern crate yup_oauth2 as oauth2;
+
+mod youtube_manager;
+
 use std::env;
 use tokio;
 use youtube3::{Result, YouTube};
@@ -41,7 +44,7 @@ async fn async_main() -> Result<()> {
         authenticator,
     );
 
-    let result = playlist_items(&hub, PLAYLIST, &None).await;
+    let result = youtube_manager::playlist::playlist_items(&hub, PLAYLIST, &None).await;
 
     match result {
         Err(e) => println!("{}", e),
@@ -111,7 +114,9 @@ async fn async_main() -> Result<()> {
                     None => (),
                 }
 
-                let result = playlist_items(&hub, PLAYLIST, &res.next_page_token).await;
+                let result =
+                    youtube_manager::playlist::playlist_items(&hub, PLAYLIST, &res.next_page_token)
+                        .await;
 
                 match result {
                     Err(e) => println!("{}", e),
@@ -121,26 +126,4 @@ async fn async_main() -> Result<()> {
         }
     }
     Ok(())
-}
-
-async fn playlist_items(
-    hub: &youtube3::YouTube,
-    playlist_id: &str,
-    next_page_token: &Option<String>,
-) -> youtube3::client::Result<(
-    hyper::Response<hyper::body::Body>,
-    youtube3::api::PlaylistItemListResponse,
-)> {
-    let mut req = hub
-        .playlist_items()
-        .list(&vec![
-            "snippet".into(),
-            "id".into(),
-            "contentDetails".into(),
-        ])
-        .playlist_id(playlist_id);
-    if let Some(next) = next_page_token {
-        req = req.page_token(&next);
-    }
-    req.doit().await
 }
