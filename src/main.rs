@@ -1,13 +1,11 @@
-extern crate google_youtube3 as youtube3;
-extern crate hyper;
-extern crate hyper_rustls;
-extern crate yup_oauth2 as oauth2;
-
 mod youtube_manager;
 
+use google_youtube3::{Result, YouTube};
+use hyper;
+use hyper_rustls;
 use std::env;
 use tokio;
-use youtube3::{Result, YouTube};
+use yup_oauth2::{read_service_account_key, ServiceAccountAuthenticator};
 
 const PLAYLIST: &str = "PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC"; // "Christ Church Winchester | Church Online Catch Up"
 
@@ -30,11 +28,11 @@ async fn async_main() -> Result<()> {
         }
     }
 
-    let service_account_key = oauth2::read_service_account_key(service_account_file)
+    let service_account_key = read_service_account_key(service_account_file)
         .await
         .unwrap();
 
-    let authenticator = yup_oauth2::ServiceAccountAuthenticator::builder(service_account_key)
+    let authenticator = ServiceAccountAuthenticator::builder(service_account_key)
         .build()
         .await
         .expect("Failed to create authenticator");

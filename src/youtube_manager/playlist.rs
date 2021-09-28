@@ -1,12 +1,11 @@
-extern crate hyper;
+use google_youtube3::{api::PlaylistItemListResponse, client::Result, YouTube};
 use hyper::Response;
-use youtube3::{api::PlaylistItemListResponse, YouTube};
 
 pub async fn playlist_items(
     hub: &YouTube,
     playlist_id: &str,
     next_page_token: &Option<String>,
-) -> youtube3::client::Result<(Response<hyper::body::Body>, PlaylistItemListResponse)> {
+) -> Result<(Response<hyper::body::Body>, PlaylistItemListResponse)> {
     let mut req = hub
         .playlist_items()
         .list(&vec![
