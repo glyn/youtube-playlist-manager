@@ -1,11 +1,12 @@
+mod youtube_manager;
+
 use google_youtube3::{Result, YouTube};
 use hyper;
 use hyper_rustls;
 use std::env;
 use tokio;
+use youtube_manager::playlist::Playlist;
 use yup_oauth2::{read_service_account_key, ServiceAccountAuthenticator};
-
-mod youtube_manager;
 
 const PLAYLIST: &str = "PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC"; // "Christ Church Winchester | Church Online Catch Up"
 
@@ -42,86 +43,15 @@ async fn async_main() -> Result<()> {
         authenticator,
     );
 
-    let result = youtube_manager::playlist::playlist_items(&hub, PLAYLIST, &None).await;
+    let play_list = youtube_manager::playlist::new(hub, PLAYLIST);
+    let videos = play_list.items().await?;
 
-    match result {
-        Err(e) => println!("{}", e),
-        Ok((_, mut res)) => {
-            while res.next_page_token.is_some() {
-                match &res.items {
-                    Some(items) => {
-                        for item in items {
-                            let video = hub
-                                .videos()
-                                .list(&vec!["liveStreamingDetails".into()])
-                                .add_id(
-                                    item.content_details
-                                        .as_ref()
-                                        .unwrap()
-                                        .video_id
-                                        .as_ref()
-                                        .unwrap(),
-                                )
-                                .doit()
-                                .await;
-                            match video {
-                                Err(e) => println!("{}", e),
-                                Ok((_, v)) => {
-                                    let items = v.items.unwrap();
-                                    {
-                                        let live_streaming_details =
-                                            items.get(0).unwrap().live_streaming_details.as_ref();
-                                        if live_streaming_details.is_some()
-                                            && live_streaming_details
-                                                .unwrap()
-                                                .actual_start_time
-                                                .is_some()
-                                        {
-                                            let actual_start_time = live_streaming_details
-                                                .unwrap()
-                                                .actual_start_time
-                                                .as_ref()
-                                                .unwrap();
-
-                                            println!(
-                                                "{}:{}",
-                                                item.snippet
-                                                    .as_ref()
-                                                    .unwrap()
-                                                    .title
-                                                    .as_ref()
-                                                    .unwrap(),
-                                                actual_start_time
-                                            )
-                                        } else {
-                                            println!(
-                                                "{}:future",
-                                                item.snippet
-                                                    .as_ref()
-                                                    .unwrap()
-                                                    .title
-                                                    .as_ref()
-                                                    .unwrap()
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    None => (),
-                }
-
-                let result =
-                    youtube_manager::playlist::playlist_items(&hub, PLAYLIST, &res.next_page_token)
-                        .await;
-
-                match result {
-                    Err(e) => println!("{}", e),
-                    Ok((_, next_res)) => res = next_res,
-                }
-            }
-        }
+    for video in videos {
+        println!(
+            "{}: {} {:?} {:?}",
+            video.video_id, video.title, video.scheduled_start_time, video.actual_start_time
+        );
     }
+
     Ok(())
 }
