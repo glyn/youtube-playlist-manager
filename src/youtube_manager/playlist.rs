@@ -2,18 +2,38 @@ use async_trait::async_trait;
 use chrono::{DateTime, FixedOffset};
 use google_youtube3::{api::PlaylistItemListResponse, client::Result, YouTube};
 use hyper::Response;
+use std::fmt;
 
 #[derive(Default)]
 pub struct Item {
     pub video_id: String,
+    playlist_item_id: String,
     pub title: String,
     pub scheduled_start_time: Option<DateTime<FixedOffset>>,
     pub actual_start_time: Option<DateTime<FixedOffset>>,
 }
 
+impl fmt::Display for Item {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}: {})", self.video_id, self.title)
+    }
+}
+
 #[async_trait]
 pub trait Playlist {
-    async fn items(self: Self) -> Result<Vec<Item>>;
+    /// items returns a vector of the items in the playlist
+    async fn items(self: &Self) -> Result<Vec<Item>>;
+
+    /// sort orders the playlist as follows:
+    /// * streamed videos in reverse chronological order (newest first), followed
+    /// * not-yet-streamed videos again in reverse chronological order (newest first), followed by
+    /// * videos for which there is no time information
+    async fn sort(self: Self) -> Result<()>;
+
+    /// prune removes any invalid videos from the playlist. These include:
+    /// * deleted videos
+    /// * videos for which there is no time information (e.g. with no live streaming information such as scheduled start time)
+    async fn prune(self: &Self) -> Result<()>;
 }
 
 struct PlaylistImpl {
@@ -30,7 +50,7 @@ pub fn new(hub: YouTube, id: &str) -> impl Playlist {
 
 #[async_trait]
 impl Playlist for PlaylistImpl {
-    async fn items(self: PlaylistImpl) -> Result<Vec<Item>> {
+    async fn items(self: &PlaylistImpl) -> Result<Vec<Item>> {
         let mut list: Vec<Item> = vec![];
 
         let (_, mut res) = playlist_items(&self.hub, &self.id, &None).await?;
@@ -54,6 +74,7 @@ impl Playlist for PlaylistImpl {
 
                 let mut it = Item {
                     video_id: video_id.to_owned(),
+                    playlist_item_id: item.id.as_ref().unwrap().to_owned(),
                     title: item
                         .snippet
                         .as_ref()
@@ -93,6 +114,24 @@ impl Playlist for PlaylistImpl {
         }
 
         Ok(list)
+    }
+
+    async fn sort(self: Self) -> Result<()> {
+        unimplemented!()
+    }
+
+    async fn prune(self: &Self) -> Result<()> {
+        for item in self.items().await? {
+            if item.scheduled_start_time.is_none() {
+                eprintln!("Deleting playlist item for video {}", item);
+                self.hub
+                    .playlist_items()
+                    .delete(&item.playlist_item_id)
+                    .doit()
+                    .await?;
+            }
+        }
+        Ok(())
     }
 }
 

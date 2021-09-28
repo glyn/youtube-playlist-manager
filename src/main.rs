@@ -61,5 +61,8 @@ async fn async_main() -> Result<()> {
         );
     }
 
+    println!("Pruning...");
+    play_list.prune().await?;
+
     Ok(())
 }
