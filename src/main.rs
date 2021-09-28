@@ -1,11 +1,11 @@
-mod youtube_manager;
-
 use google_youtube3::{Result, YouTube};
 use hyper;
 use hyper_rustls;
 use std::env;
 use tokio;
 use yup_oauth2::{read_service_account_key, ServiceAccountAuthenticator};
+
+mod youtube_manager;
 
 const PLAYLIST: &str = "PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC"; // "Christ Church Winchester | Church Online Catch Up"
 
