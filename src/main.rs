@@ -48,8 +48,16 @@ async fn async_main() -> Result<()> {
 
     for video in videos {
         println!(
-            "{}: {} {:?} {:?}",
-            video.video_id, video.title, video.scheduled_start_time, video.actual_start_time
+            "{}: {} {:?} {:?} {}",
+            video.video_id,
+            video.title,
+            video.scheduled_start_time,
+            video.actual_start_time,
+            if video.scheduled_start_time.is_none() {
+                "** invalid"
+            } else {
+                ""
+            }
         );
     }
 
