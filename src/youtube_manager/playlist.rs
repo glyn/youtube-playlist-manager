@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, FixedOffset};
-use google_youtube3::{api, api::PlaylistItemListResponse, api::Scope, client::Result, YouTube};
+use google_youtube3::{api::PlaylistItemListResponse, api::Scope, client::Result, YouTube};
 use hyper::Response;
 use std::fmt;
 
@@ -41,33 +41,12 @@ struct PlaylistImpl {
     id: String,
 }
 
+/// new constructs a Playlist trait implementation for manipulating the playlist with the given playlist id.
 pub fn new(hub: YouTube, id: &str) -> impl Playlist {
     PlaylistImpl {
         hub: hub,
         id: id.to_owned(),
     }
-}
-
-pub async fn create(hub: &YouTube /*, id: &str*/) -> Result<()> {
-    let playlist = api::Playlist {
-        snippet: Some(api::PlaylistSnippet {
-            channel_id: Some("UCn2CGMGOZT2HqsKvTMTdOQA".to_owned()),
-            title: Some("test playlist - please ignore".to_owned()),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-    hub.playlists()
-        .insert(playlist)
-        .add_scope(Scope::ForceSsl)
-        .add_scope(Scope::Partner)
-        .add_scope(Scope::Full)
-        .add_scope(Scope::Upload)
-        .add_scope(Scope::ChannelMembershipCreator)
-        .add_scope(Scope::PartnerChannelAudit)
-        .doit()
-        .await?;
-    Ok(())
 }
 
 #[async_trait]
