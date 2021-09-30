@@ -56,9 +56,26 @@ async fn async_main() -> Result<()> {
     );
 
     let play_list = youtube_manager::playlist::new(hub, PLAYLIST);
-    let videos = play_list.items().await?;
 
-    for video in videos {
+    println!("Input playlist:");
+    print_videos(&play_list).await?;
+
+    println!("\nPruning...");
+    play_list.prune().await?;
+
+    println!("Sorting...");
+    play_list.sort().await?;
+
+    println!("Done.");
+
+    println!("\nOutput playlist:");
+    print_videos(&play_list).await?;
+
+    Ok(())
+}
+
+async fn print_videos(play_list: &dyn youtube_manager::playlist::Playlist) -> Result<()> {
+    for video in play_list.items().await? {
         println!(
             "{}: {} {:?} {:?} {}",
             video.video_id,
@@ -72,9 +89,5 @@ async fn async_main() -> Result<()> {
             }
         );
     }
-
-    println!("Pruning...");
-    play_list.prune().await?;
-
     Ok(())
 }

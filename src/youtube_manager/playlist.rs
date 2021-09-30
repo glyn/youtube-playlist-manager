@@ -1,10 +1,15 @@
 use async_trait::async_trait;
 use chrono::{DateTime, FixedOffset};
-use google_youtube3::{api::PlaylistItemListResponse, api::Scope, client::Result, YouTube};
+use google_youtube3::{
+    api::Scope,
+    api::{PlaylistItem, PlaylistItemListResponse, PlaylistItemSnippet},
+    client::Result,
+    YouTube,
+};
 use hyper::Response;
-use std::fmt;
+use std::{cmp::Ordering, fmt};
 
-#[derive(Default)]
+#[derive(Default, Clone, PartialEq, Debug)]
 pub struct Item {
     pub video_id: String,
     playlist_item_id: String,
@@ -28,7 +33,7 @@ pub trait Playlist {
     /// * streamed videos in reverse chronological order (newest first), followed
     /// * not-yet-streamed videos again in reverse chronological order (newest first), followed by
     /// * videos for which there is no time information
-    async fn sort(self: Self) -> Result<()>;
+    async fn sort(self: &Self) -> Result<()>;
 
     /// prune removes any invalid videos from the playlist. These include:
     /// * deleted videos
@@ -117,8 +122,30 @@ impl Playlist for PlaylistImpl {
         Ok(list)
     }
 
-    async fn sort(self: Self) -> Result<()> {
-        unimplemented!()
+    async fn sort(self: &Self) -> Result<()> {
+        let mut items = self.items().await?;
+        let original_items = items.clone();
+        sort_items(&mut items);
+        if items != original_items {
+            // Re-order the playlist to match the sorted items.
+            for (n, item) in items.iter().enumerate() {
+                self.hub
+                    .playlist_items()
+                    .update(PlaylistItem {
+                        id: Some(item.playlist_item_id.clone()),
+                        snippet: Some(PlaylistItemSnippet {
+                            //playlist_id: Some(self.id.clone()), //needed?
+                            position: Some(n as u32),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    })
+                    .add_scope(Scope::Full)
+                    .doit()
+                    .await?;
+            }
+        }
+        Ok(())
     }
 
     async fn prune(self: &Self) -> Result<()> {
@@ -159,4 +186,147 @@ async fn playlist_items(
         req = req.page_token(&next);
     }
     req.doit().await
+}
+
+fn sort_items(items: &mut Vec<Item>) {
+    items.sort_by(|v, w| {
+        // println!("v: {:?}\nw: {:?}", v, w);
+        if v.actual_start_time.is_some() {
+            if w.actual_start_time.is_some() {
+                // Order streamed items in reverse chronological order
+                v.actual_start_time
+                    .unwrap()
+                    .cmp(&w.actual_start_time.unwrap())
+                    .reverse()
+            } else {
+                // Order streamed items before unstreamed items
+                Ordering::Less
+            }
+        } else if w.actual_start_time.is_some() {
+            // Order streamed items before unstreamed items
+            Ordering::Greater
+        } else if v.scheduled_start_time.is_some() {
+            if w.scheduled_start_time.is_some() {
+                // Order unstreamed, scheduled items in reverse chronological order
+                v.scheduled_start_time
+                    .unwrap()
+                    .cmp(&w.scheduled_start_time.unwrap())
+                    .reverse()
+            } else {
+                // Order unstreamed, scheduled items before unstreamed, unscheduled items
+                Ordering::Less
+            }
+        } else if w.scheduled_start_time.is_some() {
+            // Order unstreamed, scheduled items before unstreamed, unscheduled items
+            Ordering::Greater
+        } else {
+            // Leave the order of unstreamed, unscheduled items alone
+            Ordering::Equal
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sort_items_empty() {
+        let mut v = vec![];
+        sort_items(&mut v);
+        assert_eq!(v, vec![]);
+    }
+
+    #[test]
+    fn sort_items_unstreamed_scheduled() {
+        let mut v = vec![new_scheduled_item(1), new_scheduled_item(2)];
+        sort_items(&mut v);
+        assert_video_ids(v, vec!["v2", "v1"]);
+
+        v = vec![new_scheduled_item(2), new_scheduled_item(1)];
+        sort_items(&mut v);
+        assert_video_ids(v, vec!["v2", "v1"]);
+    }
+
+    #[test]
+    fn sort_items_scheduled_before_unstreamed_unscheduled() {
+        let mut v = vec![new_item(1), new_scheduled_item(2)];
+        sort_items(&mut v);
+        assert_video_ids(v, vec!["v2", "v1"]);
+
+        v = vec![new_scheduled_item(1), new_item(2)];
+        sort_items(&mut v);
+        assert_video_ids(v, vec!["v1", "v2"]);
+    }
+
+    #[test]
+    fn sort_items_streamed() {
+        let mut v = vec![new_streamed_item(1), new_streamed_item(2)];
+        sort_items(&mut v);
+        assert_video_ids(v, vec!["v2", "v1"]);
+
+        v = vec![new_streamed_item(2), new_streamed_item(1)];
+        sort_items(&mut v);
+        assert_video_ids(v, vec!["v2", "v1"]);
+    }
+
+    #[test]
+    fn sort_items_streamed_before_scheduled() {
+        let mut v = vec![new_scheduled_item(2), new_streamed_item(1)];
+        sort_items(&mut v);
+        assert_video_ids(v, vec!["v1", "v2"]);
+
+        v = vec![new_streamed_item(1), new_scheduled_item(2)];
+        sort_items(&mut v);
+        assert_video_ids(v, vec!["v1", "v2"]);
+    }
+
+    #[test]
+    fn sort_items_streamed_before_unstreamed_scheduled() {
+        let mut v = vec![new_item(2), new_streamed_item(1)];
+        sort_items(&mut v);
+        assert_video_ids(v, vec!["v1", "v2"]);
+
+        v = vec![new_streamed_item(1), new_item(2)];
+        sort_items(&mut v);
+        assert_video_ids(v, vec!["v1", "v2"]);
+    }
+
+    #[test]
+    fn sort_items_unstreamed_unscheduled() {
+        let mut v = vec![new_item(1), new_item(2)];
+        sort_items(&mut v);
+        assert_video_ids(v, vec!["v1", "v2"]);
+    }
+
+    fn new_scheduled_item(n: u32) -> Item {
+        let mut i = new_item(n);
+        i.scheduled_start_time =
+            Some(DateTime::parse_from_rfc3339(&format!("2021-09-30T10:55:0{}+01:00", n)).unwrap());
+        i
+    }
+
+    fn new_streamed_item(n: u32) -> Item {
+        let mut i = new_scheduled_item(n);
+        i.actual_start_time =
+            Some(DateTime::parse_from_rfc3339(&format!("2021-09-30T10:56:0{}+01:00", n)).unwrap());
+        i
+    }
+
+    fn new_item(n: u32) -> Item {
+        assert!(n <= 9);
+        Item {
+            video_id: format!("v{}", n).to_owned(),
+            playlist_item_id: format!("pii{}", n).to_owned(),
+            title: format!("video {}", n).to_owned(),
+            ..Default::default()
+        }
+    }
+
+    fn assert_video_ids(v: Vec<Item>, expected: Vec<&str>) {
+        assert_eq!(v.len(), expected.len());
+        for (n, i) in v.iter().enumerate() {
+            assert_eq!(i.video_id, expected.get(n).unwrap().to_owned());
+        }
+    }
 }
