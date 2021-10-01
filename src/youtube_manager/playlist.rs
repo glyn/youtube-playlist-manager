@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, FixedOffset};
 use google_youtube3::{
     api::Scope,
-    api::{PlaylistItem, PlaylistItemListResponse, PlaylistItemSnippet},
+    api::{PlaylistItem, PlaylistItemListResponse, PlaylistItemSnippet, ResourceId},
     client::Result,
     YouTube,
 };
@@ -134,7 +134,12 @@ impl Playlist for PlaylistImpl {
                     .update(PlaylistItem {
                         id: Some(item.playlist_item_id.clone()),
                         snippet: Some(PlaylistItemSnippet {
-                            //playlist_id: Some(self.id.clone()), //needed?
+                            playlist_id: Some(self.id.clone()),
+                            resource_id: Some(ResourceId {
+                                kind: Some("youtube#video".to_owned()),
+                                video_id: Some(item.video_id.clone()),
+                                ..Default::default()
+                            }),
                             position: Some(n as u32),
                             ..Default::default()
                         }),
@@ -153,6 +158,7 @@ impl Playlist for PlaylistImpl {
         self.sort().await?;
         for (n, i) in self.items().await?.into_iter().enumerate() {
             if n >= max_streamed && i.actual_start_time.is_some() {
+                // better to count streamed items in case of new unstreamed arrivals at the top of the list
                 eprintln!("Removing surplus streamed video from playlist {}", i);
                 prune_item(&self.hub, i.playlist_item_id).await?;
             } else if i.scheduled_start_time.is_none() {
