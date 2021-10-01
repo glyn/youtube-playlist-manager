@@ -29,15 +29,6 @@ async fn async_main() -> Result<()> {
         }
     }
 
-    // let service_account_key = read_service_account_key(service_account_file)
-    //     .await
-    //     .unwrap();
-
-    // let authenticator = ServiceAccountAuthenticator::builder(service_account_key)
-    //     .build()
-    //     .await
-    //     .expect("Failed to create authenticator");
-
     let secret = read_application_secret(client_secret_file).await.unwrap();
 
     // Create an authenticator that uses an InstalledFlow to authenticate. The
@@ -61,10 +52,7 @@ async fn async_main() -> Result<()> {
     print_videos(&play_list).await?;
 
     println!("\nPruning...");
-    play_list.prune().await?;
-
-    println!("Sorting...");
-    play_list.sort().await?;
+    play_list.prune(6).await?;
 
     println!("Done.");
 

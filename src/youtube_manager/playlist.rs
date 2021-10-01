@@ -38,7 +38,7 @@ pub trait Playlist {
     /// prune removes any invalid videos from the playlist. These include:
     /// * deleted videos
     /// * videos for which there is no time information (e.g. with no live streaming information such as scheduled start time)
-    async fn prune(self: &Self) -> Result<()>;
+    async fn prune(self: &Self, max_streamed: usize) -> Result<()>;
 }
 
 struct PlaylistImpl {
@@ -148,25 +148,29 @@ impl Playlist for PlaylistImpl {
         Ok(())
     }
 
-    async fn prune(self: &Self) -> Result<()> {
-        for item in self.items().await? {
-            if item.scheduled_start_time.is_none() {
-                eprintln!("Deleting playlist item for video {}", item);
-                self.hub
-                    .playlist_items()
-                    .delete(&item.playlist_item_id)
-                    .add_scope(Scope::ForceSsl)
-                    .add_scope(Scope::Partner)
-                    .add_scope(Scope::Full)
-                    .add_scope(Scope::Upload)
-                    .add_scope(Scope::ChannelMembershipCreator)
-                    .add_scope(Scope::PartnerChannelAudit)
-                    .doit()
-                    .await?;
+    async fn prune(self: &Self, max_streamed: usize) -> Result<()> {
+        // Remove surplus streamed videos and invalid videos from the playlist
+        self.sort().await?;
+        for (n, i) in self.items().await?.into_iter().enumerate() {
+            if n >= max_streamed && i.actual_start_time.is_some() {
+                eprintln!("Removing surplus streamed video from playlist {}", i);
+                prune_item(&self.hub, i.playlist_item_id).await?;
+            } else if i.scheduled_start_time.is_none() {
+                eprintln!("Deleting playlist item for unscheduled video {}", i);
+                prune_item(&self.hub, i.playlist_item_id).await?;
             }
         }
         Ok(())
     }
+}
+
+async fn prune_item(hub: &YouTube, playlist_item_id: String) -> Result<()> {
+    hub.playlist_items()
+        .delete(&playlist_item_id)
+        .add_scope(Scope::Full)
+        .doit()
+        .await?;
+    Ok(())
 }
 
 async fn playlist_items(
