@@ -156,11 +156,14 @@ impl Playlist for PlaylistImpl {
     async fn prune(self: &Self, max_streamed: usize) -> Result<()> {
         // Remove surplus streamed videos and invalid videos from the playlist
         self.sort().await?;
-        for (n, i) in self.items().await?.into_iter().enumerate() {
-            if n >= max_streamed && i.actual_start_time.is_some() {
-                // better to count streamed items in case of new unstreamed arrivals at the top of the list
-                eprintln!("Removing surplus streamed video from playlist {}", i);
-                prune_item(&self.hub, i.playlist_item_id).await?;
+        let mut n = 0;
+        for i in self.items().await? {
+            if i.actual_start_time.is_some() {
+                n += 1;
+                if n > max_streamed {
+                    eprintln!("Removing surplus streamed video from playlist {}", i);
+                    prune_item(&self.hub, i.playlist_item_id).await?;
+                }
             } else if i.scheduled_start_time.is_none() {
                 eprintln!("Deleting playlist item for unscheduled video {}", i);
                 prune_item(&self.hub, i.playlist_item_id).await?;
