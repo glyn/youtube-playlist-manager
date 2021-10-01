@@ -6,6 +6,7 @@ edition = "2018"
 [dependencies]
 async-trait = "0.1.51"
 chrono = "0.4.19"
+clap = "2.33.3"
 google-youtube3 = "2.0.8"
 hyper = "0.14.13"
 hyper-rustls = "0.22.1"

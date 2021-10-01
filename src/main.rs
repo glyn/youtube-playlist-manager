@@ -1,5 +1,6 @@
 mod youtube_manager;
 
+use clap::{App, Arg};
 use google_youtube3::{Result, YouTube};
 use hyper;
 use hyper_rustls;
@@ -8,18 +9,27 @@ use tokio;
 use youtube_manager::playlist::Playlist;
 use yup_oauth2::{read_application_secret, InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 
-const PLAYLIST: &str = "PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC"; // "Christ Church Winchester | Church Online Catch Up"
-
 fn main() -> Result<()> {
+    let matches = App::new("plough")
+        .arg(
+            Arg::with_name("playlist_id")
+                .help("the playlist id")
+                .index(1) // Starts at 1
+                .required(true),
+        )
+        .get_matches();
+
     tokio::runtime::Builder::new_current_thread()
         .enable_io()
         .enable_time()
         .build()
         .unwrap()
-        .block_on(async_main())
+        .block_on(async_main(
+            matches.value_of("playlist_id").unwrap().to_owned(),
+        ))
 }
 
-async fn async_main() -> Result<()> {
+async fn async_main(playlist: String) -> Result<()> {
     let key = "YOUTUBE_CLIENT_SECRET_FILE";
     let client_secret_file;
     match env::var(key) {
@@ -46,7 +56,7 @@ async fn async_main() -> Result<()> {
         auth,
     );
 
-    let play_list = youtube_manager::playlist::new(hub, PLAYLIST);
+    let play_list = youtube_manager::playlist::new(hub, &playlist);
 
     println!("Input playlist:");
     print_videos(&play_list).await?;
