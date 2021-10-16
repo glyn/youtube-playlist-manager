@@ -33,12 +33,15 @@ pub trait Playlist {
     /// * streamed videos in reverse chronological order (newest first), followed
     /// * not-yet-streamed videos again in reverse chronological order (newest first), followed by
     /// * videos for which there is no time information
-    async fn sort(self: &Self) -> Result<()>;
+    async fn sort(self: &Self, dry_run: bool) -> Result<()>;
 
     /// prune removes any invalid videos from the playlist. These include:
     /// * deleted videos
     /// * videos for which there is no time information (e.g. with no live streaming information such as scheduled start time)
-    async fn prune(self: &Self, max_streamed: usize) -> Result<()>;
+    async fn prune(self: &Self, max_streamed: usize, dry_run: bool) -> Result<()>;
+
+    // print prints the playlist to standard error.
+    async fn print(self: &Self) -> Result<()>;
 }
 
 struct PlaylistImpl {
@@ -122,55 +125,100 @@ impl Playlist for PlaylistImpl {
         Ok(list)
     }
 
-    async fn sort(self: &Self) -> Result<()> {
+    async fn sort(self: &Self, dry_run: bool) -> Result<()> {
         let mut items = self.items().await?;
         let original_items = items.clone();
         sort_items(&mut items);
-        if items != original_items {
-            // Re-order the playlist to match the sorted items.
-            for (n, item) in items.iter().enumerate() {
-                self.hub
-                    .playlist_items()
-                    .update(PlaylistItem {
-                        id: Some(item.playlist_item_id.clone()),
-                        snippet: Some(PlaylistItemSnippet {
-                            playlist_id: Some(self.id.clone()),
-                            resource_id: Some(ResourceId {
-                                kind: Some("youtube#video".to_owned()),
-                                video_id: Some(item.video_id.clone()),
+        if items == original_items {
+            eprintln!("Playlist is already in the correct order");
+            Ok(())
+        } else {
+            if dry_run {
+                eprintln!("Playlist would be sorted into this order:");
+                print(items)?;
+                eprintln!("");
+            } else {
+                // Re-order the playlist to match the sorted items.
+                for (n, item) in items.iter().enumerate() {
+                    self.hub
+                        .playlist_items()
+                        .update(PlaylistItem {
+                            id: Some(item.playlist_item_id.clone()),
+                            snippet: Some(PlaylistItemSnippet {
+                                playlist_id: Some(self.id.clone()),
+                                resource_id: Some(ResourceId {
+                                    kind: Some("youtube#video".to_owned()),
+                                    video_id: Some(item.video_id.clone()),
+                                    ..Default::default()
+                                }),
+                                position: Some(n as u32),
                                 ..Default::default()
                             }),
-                            position: Some(n as u32),
                             ..Default::default()
-                        }),
-                        ..Default::default()
-                    })
-                    .add_scope(Scope::Full)
-                    .doit()
-                    .await?;
+                        })
+                        .add_scope(Scope::Full)
+                        .doit()
+                        .await?;
+                }
             }
+            Ok(())
         }
-        Ok(())
     }
 
-    async fn prune(self: &Self, max_streamed: usize) -> Result<()> {
+    async fn prune(self: &Self, max_streamed: usize, dry_run: bool) -> Result<()> {
         // Remove surplus streamed videos and invalid videos from the playlist
-        self.sort().await?;
+        self.sort(dry_run).await?;
         let mut n = 0;
         for i in self.items().await? {
             if i.actual_start_time.is_some() {
                 n += 1;
                 if n > max_streamed {
-                    eprintln!("Removing surplus streamed video from playlist {}", i);
-                    prune_item(&self.hub, i.playlist_item_id).await?;
+                    if !dry_run {
+                        eprintln!("Removing surplus streamed video from playlist {}", i);
+                        prune_item(&self.hub, i.playlist_item_id).await?;
+                    } else {
+                        eprintln!(
+                            "Non-dry run would remove surplus streamed video from playlist {}",
+                            i
+                        );
+                    }
                 }
             } else if i.scheduled_start_time.is_none() {
-                eprintln!("Deleting playlist item for unscheduled video {}", i);
-                prune_item(&self.hub, i.playlist_item_id).await?;
+                if !dry_run {
+                    eprintln!("Deleting playlist item for unscheduled video {}", i);
+                    prune_item(&self.hub, i.playlist_item_id).await?;
+                } else {
+                    eprintln!(
+                        "Non-dry run would delete playlist item for unscheduled video {}",
+                        i
+                    );
+                }
             }
         }
         Ok(())
     }
+
+    async fn print(self: &Self) -> Result<()> {
+        print(self.items().await?)
+    }
+}
+
+fn print(items: Vec<Item>) -> Result<()> {
+    for video in items {
+        eprintln!(
+            "{}: {} {:?} {:?} {}",
+            video.video_id,
+            video.title,
+            video.scheduled_start_time,
+            video.actual_start_time,
+            if video.scheduled_start_time.is_none() {
+                "** invalid"
+            } else {
+                ""
+            }
+        );
+    }
+    Ok(())
 }
 
 async fn prune_item(hub: &YouTube, playlist_item_id: String) -> Result<()> {

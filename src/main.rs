@@ -5,6 +5,7 @@ use google_youtube3::{Result, YouTube};
 use hyper;
 use hyper_rustls;
 use std::env;
+use std::str::FromStr;
 use tokio;
 use youtube_manager::playlist::Playlist;
 use yup_oauth2::{read_application_secret, InstalledFlowAuthenticator, InstalledFlowReturnMethod};
@@ -17,6 +18,13 @@ fn main() -> Result<()> {
                 .index(1) // Starts at 1
                 .required(true),
         )
+        .arg(
+            Arg::with_name("dry-run")
+                .help("go through the motions without making any changes on YouTube")
+                .takes_value(true)
+                .long("dry-run")
+                .default_value("true"), // for safety
+        )
         .get_matches();
 
     tokio::runtime::Builder::new_current_thread()
@@ -26,10 +34,11 @@ fn main() -> Result<()> {
         .unwrap()
         .block_on(async_main(
             matches.value_of("playlist_id").unwrap().to_owned(),
+            FromStr::from_str(matches.value_of("dry-run").unwrap()).unwrap_or(true),
         ))
 }
 
-async fn async_main(playlist: String) -> Result<()> {
+async fn async_main(playlist: String, dry_run: bool) -> Result<()> {
     let key = "YOUTUBE_CLIENT_SECRET_FILE";
     let client_secret_file;
     match env::var(key) {
@@ -59,33 +68,17 @@ async fn async_main(playlist: String) -> Result<()> {
     let play_list = youtube_manager::playlist::new(hub, &playlist);
 
     println!("Input playlist:");
-    print_videos(&play_list).await?;
+    play_list.print().await?;
 
     println!("\nPruning...");
-    play_list.prune(6).await?;
+    play_list.prune(6, dry_run).await?;
 
     println!("Done.");
 
-    println!("\nOutput playlist:");
-    print_videos(&play_list).await?;
-
-    Ok(())
-}
-
-async fn print_videos(play_list: &dyn youtube_manager::playlist::Playlist) -> Result<()> {
-    for video in play_list.items().await? {
-        println!(
-            "{}: {} {:?} {:?} {}",
-            video.video_id,
-            video.title,
-            video.scheduled_start_time,
-            video.actual_start_time,
-            if video.scheduled_start_time.is_none() {
-                "** invalid"
-            } else {
-                ""
-            }
-        );
+    if !dry_run {
+        println!("\nOutput playlist:");
+        play_list.print().await?;
     }
+
     Ok(())
 }
