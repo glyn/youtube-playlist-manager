@@ -27,19 +27,19 @@ impl fmt::Display for Item {
 
 #[async_trait]
 pub trait Playlist {
-    /// items returns a vector of the items in the playlist
+    /// items returns a vector of the items in the playlist.
     async fn items(self: &Self) -> Result<Vec<Item>>;
 
     /// sort orders the playlist as follows:
     /// * streamed videos in reverse chronological order (newest first), followed
     /// * not-yet-streamed videos again in reverse chronological order (newest first), followed by
-    /// * videos for which there is no time information
-    async fn sort(self: &Self, dry_run: bool) -> Result<()>;
+    /// * videos for which there is no time information.
+    async fn sort(self: &Self) -> Result<()>;
 
     /// prune removes any invalid videos from the playlist. These include:
     /// * deleted videos
-    /// * videos for which there is no time information (e.g. with no live streaming information such as scheduled start time)
-    async fn prune(self: &Self, max_streamed: usize, dry_run: bool) -> Result<()>;
+    /// * videos for which there is no time information (e.g. with no live streaming information such as scheduled start time).
+    async fn prune(self: &Self, max_streamed: usize) -> Result<()>;
 
     // print prints the playlist to standard error.
     async fn print(self: &Self) -> Result<()>;
@@ -48,13 +48,19 @@ pub trait Playlist {
 struct PlaylistImpl {
     hub: YouTube,
     id: String,
+    dry_run: bool,
+    debug: bool,
 }
 
 /// new constructs a Playlist trait implementation for manipulating the playlist with the given playlist id.
-pub fn new(hub: YouTube, id: &str) -> impl Playlist {
+/// If dry-run is true, information will be printed out but the playlist will not be updated on YouTube.
+/// Debugging information is printed if and only if debug is true.
+pub fn new(hub: YouTube, id: &str, dry_run: bool, debug: bool) -> impl Playlist {
     PlaylistImpl {
         hub: hub,
         id: id.to_owned(),
+        dry_run: dry_run,
+        debug: debug,
     }
 }
 
@@ -133,10 +139,13 @@ impl Playlist for PlaylistImpl {
             }
         }
 
+        if self.debug {
+            eprintln!("playlist items: {:?}", list);
+        }
         Ok(list)
     }
 
-    async fn sort(self: &Self, dry_run: bool) -> Result<()> {
+    async fn sort(self: &Self) -> Result<()> {
         let mut items = self.items().await?;
         let original_items = items.clone();
         sort_items(&mut items);
@@ -144,7 +153,7 @@ impl Playlist for PlaylistImpl {
             eprintln!("Playlist is already in the correct order");
             Ok(())
         } else {
-            if dry_run {
+            if self.dry_run {
                 eprintln!("Playlist would be sorted into this order:");
                 print(items)?;
                 eprintln!("");
@@ -176,13 +185,13 @@ impl Playlist for PlaylistImpl {
         }
     }
 
-    async fn prune(self: &Self, max_streamed: usize, dry_run: bool) -> Result<()> {
+    async fn prune(self: &Self, max_streamed: usize) -> Result<()> {
         // Remove surplus streamed videos and invalid videos from the playlist
-        self.sort(dry_run).await?;
+        self.sort().await?;
         let mut n = 0;
         for i in self.items().await? {
             if i.blocked {
-                if !dry_run {
+                if !self.dry_run {
                     eprintln!("Deleting playlist item for blocked video {}", i);
                     prune_item(&self.hub, i.playlist_item_id).await?;
                 } else {
@@ -194,7 +203,7 @@ impl Playlist for PlaylistImpl {
             } else if i.actual_start_time.is_some() {
                 n += 1;
                 if n > max_streamed {
-                    if !dry_run {
+                    if !self.dry_run {
                         eprintln!("Removing surplus streamed video from playlist {}", i);
                         prune_item(&self.hub, i.playlist_item_id).await?;
                     } else {
@@ -205,7 +214,7 @@ impl Playlist for PlaylistImpl {
                     }
                 }
             } else if i.scheduled_start_time.is_none() {
-                if !dry_run {
+                if !self.dry_run {
                     eprintln!("Deleting playlist item for unscheduled video {}", i);
                     prune_item(&self.hub, i.playlist_item_id).await?;
                 } else {

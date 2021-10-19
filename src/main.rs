@@ -25,6 +25,12 @@ fn main() -> Result<()> {
                 .long("dry-run")
                 .default_value("true"), // for safety
         )
+        .arg(
+            Arg::with_name("debug")
+                .help("print extra debugging information")
+                .long("debug")
+                .takes_value(false),
+        )
         .get_matches();
 
     tokio::runtime::Builder::new_current_thread()
@@ -35,10 +41,11 @@ fn main() -> Result<()> {
         .block_on(async_main(
             matches.value_of("playlist_id").unwrap().to_owned(),
             FromStr::from_str(matches.value_of("dry-run").unwrap()).unwrap_or(true),
+            matches.is_present("debug"),
         ))
 }
 
-async fn async_main(playlist: String, dry_run: bool) -> Result<()> {
+async fn async_main(playlist: String, dry_run: bool, debug: bool) -> Result<()> {
     let key = "YOUTUBE_CLIENT_SECRET_FILE";
     let client_secret_file;
     match env::var(key) {
@@ -65,19 +72,22 @@ async fn async_main(playlist: String, dry_run: bool) -> Result<()> {
         auth,
     );
 
-    let play_list = youtube_manager::playlist::new(hub, &playlist);
+    let play_list = youtube_manager::playlist::new(hub, &playlist, dry_run, debug);
 
-    println!("Input playlist:");
+    eprintln!("Input playlist:");
     play_list.print().await?;
 
-    println!("\nPruning...");
-    play_list.prune(6, dry_run).await?;
-
-    println!("Done.");
+    eprintln!("\nPruning...");
+    play_list.prune(6).await?;
 
     if !dry_run {
-        println!("\nOutput playlist:");
+        eprintln!("Done.");
+        eprintln!("\nOutput playlist:");
         play_list.print().await?;
+    } else {
+        eprintln!(
+            "\nThis was a dry run. To enable changes to the YouTube playlist, use --dry-run=false"
+        );
     }
 
     Ok(())
