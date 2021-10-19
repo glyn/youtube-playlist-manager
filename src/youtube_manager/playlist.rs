@@ -16,6 +16,7 @@ pub struct Item {
     pub title: String,
     pub scheduled_start_time: Option<DateTime<FixedOffset>>,
     pub actual_start_time: Option<DateTime<FixedOffset>>,
+    pub blocked: bool,
 }
 
 impl fmt::Display for Item {
@@ -76,7 +77,10 @@ impl Playlist for PlaylistImpl {
                 let (_, v) = self
                     .hub
                     .videos()
-                    .list(&vec!["liveStreamingDetails".into()])
+                    .list(&vec![
+                        "liveStreamingDetails".into(),
+                        "contentDetails".into(),
+                    ])
                     .add_id(video_id)
                     .doit()
                     .await?;
@@ -109,6 +113,13 @@ impl Playlist for PlaylistImpl {
                             .actual_start_time
                             .as_ref()
                             .map(|d| DateTime::parse_from_rfc3339(&d).unwrap());
+                    }
+                    if let Some(content_details) = videos.get(0).unwrap().content_details.as_ref() {
+                        if let Some(restriction) = content_details.region_restriction.as_ref() {
+                            if let Some(blocked) = restriction.blocked.as_ref() {
+                                it.blocked = !blocked.is_empty();
+                            }
+                        }
                     }
                 }
                 list.push(it)
@@ -170,7 +181,17 @@ impl Playlist for PlaylistImpl {
         self.sort(dry_run).await?;
         let mut n = 0;
         for i in self.items().await? {
-            if i.actual_start_time.is_some() {
+            if i.blocked {
+                if !dry_run {
+                    eprintln!("Deleting playlist item for blocked video {}", i);
+                    prune_item(&self.hub, i.playlist_item_id).await?;
+                } else {
+                    eprintln!(
+                        "Non-dry run would delete playlist item for blocked video {}",
+                        i
+                    );
+                }
+            } else if i.actual_start_time.is_some() {
                 n += 1;
                 if n > max_streamed {
                     if !dry_run {
@@ -206,7 +227,7 @@ impl Playlist for PlaylistImpl {
 fn print(items: Vec<Item>) -> Result<()> {
     for video in items {
         eprintln!(
-            "{}: {} {:?} {:?} {}",
+            "{}: {} {:?} {:?} {} {}",
             video.video_id,
             video.title,
             video.scheduled_start_time,
@@ -215,7 +236,8 @@ fn print(items: Vec<Item>) -> Result<()> {
                 "** invalid"
             } else {
                 ""
-            }
+            },
+            if video.blocked { "** blocked" } else { "" }
         );
     }
     Ok(())
