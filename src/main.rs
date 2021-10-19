@@ -19,6 +19,13 @@ fn main() -> Result<()> {
                 .required(true),
         )
         .arg(
+            Arg::with_name("timezone")
+                .help("the timezone for displaying dates and times, e.g. Europe/London")
+                .takes_value(true)
+                .long("timezone")
+                .default_value("UTC"),
+        )
+        .arg(
             Arg::with_name("dry-run")
                 .help("go through the motions without making any changes on YouTube")
                 .takes_value(true)
@@ -40,12 +47,13 @@ fn main() -> Result<()> {
         .unwrap()
         .block_on(async_main(
             matches.value_of("playlist_id").unwrap().to_owned(),
+            matches.value_of("timezone").unwrap().to_string(),
             FromStr::from_str(matches.value_of("dry-run").unwrap()).unwrap_or(true),
             matches.is_present("debug"),
         ))
 }
 
-async fn async_main(playlist: String, dry_run: bool, debug: bool) -> Result<()> {
+async fn async_main(playlist: String, timezone: String, dry_run: bool, debug: bool) -> Result<()> {
     let key = "YOUTUBE_CLIENT_SECRET_FILE";
     let client_secret_file;
     match env::var(key) {
@@ -72,7 +80,7 @@ async fn async_main(playlist: String, dry_run: bool, debug: bool) -> Result<()> 
         auth,
     );
 
-    let play_list = youtube_manager::playlist::new(hub, &playlist, dry_run, debug);
+    let play_list = youtube_manager::playlist::new(hub, &playlist, timezone, dry_run, debug);
 
     eprintln!("Input playlist:");
     play_list.print().await?;
