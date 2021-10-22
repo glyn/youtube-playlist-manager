@@ -4,7 +4,6 @@ use clap::{App, Arg};
 use google_youtube3::{Result, YouTube};
 use hyper;
 use hyper_rustls;
-use std::env;
 use std::str::FromStr;
 use tokio;
 use youtube_manager::playlist::Playlist;
@@ -16,6 +15,13 @@ fn main() -> Result<()> {
             Arg::with_name("playlist_id")
                 .help("the playlist id")
                 .index(1) // Starts at 1
+                .required(true),
+        )
+        .arg(
+            Arg::with_name("secret")
+                .help("YouTube client secret file path")
+                .takes_value(true)
+                .long("secret")
                 .required(true),
         )
         .arg(
@@ -47,23 +53,21 @@ fn main() -> Result<()> {
         .unwrap()
         .block_on(async_main(
             matches.value_of("playlist_id").unwrap().to_owned(),
+            matches.value_of("secret").unwrap().to_string(),
             matches.value_of("timezone").unwrap().to_string(),
             FromStr::from_str(matches.value_of("dry-run").unwrap()).unwrap_or(true),
             matches.is_present("debug"),
         ))
 }
 
-async fn async_main(playlist: String, timezone: String, dry_run: bool, debug: bool) -> Result<()> {
-    let key = "YOUTUBE_CLIENT_SECRET_FILE";
-    let client_secret_file;
-    match env::var(key) {
-        Ok(val) => client_secret_file = val,
-        Err(e) => {
-            panic!("Environment variable {} must be set to the file path of a Google API JSON service account file: {}", key, e);
-        }
-    }
-
-    let secret = read_application_secret(client_secret_file).await.unwrap();
+async fn async_main(
+    playlist: String,
+    secret_path: String,
+    timezone: String,
+    dry_run: bool,
+    debug: bool,
+) -> Result<()> {
+    let secret = read_application_secret(secret_path).await.unwrap();
 
     // Create an authenticator that uses an InstalledFlow to authenticate. The
     // authentication tokens are persisted to a file. The
