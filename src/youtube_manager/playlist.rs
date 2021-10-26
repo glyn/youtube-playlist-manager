@@ -104,7 +104,7 @@ pub trait Playlist {
     /// prune removes any invalid videos from the playlist. These include:
     /// * deleted videos
     /// * videos for which there is no time information (e.g. with no live streaming information such as scheduled start time).
-    async fn prune(self: &Self, max_streamed: usize) -> Result<()>;
+    async fn prune(self: &Self, max_catch_up: usize) -> Result<()>;
 
     // print prints the playlist to standard error.
     async fn print(self: &Self) -> Result<()>;
