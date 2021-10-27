@@ -4,7 +4,6 @@ use clap::{App, Arg, SubCommand};
 use google_youtube3::{Result, YouTube};
 use hyper;
 use hyper_rustls;
-use std::str::FromStr;
 use tokio;
 use youtube_manager::playlist::Playlist;
 use yup_oauth2::{read_application_secret, InstalledFlowAuthenticator, InstalledFlowReturnMethod};
@@ -33,13 +32,6 @@ fn main() -> Result<()> {
                 .default_value("UTC"),
         )
         .arg(
-            Arg::with_name("dry-run")
-                .help("Goes through the motions without making any changes on YouTube")
-                .takes_value(true)
-                .long("dry-run")
-                .default_value("true"), // for safety
-        )
-        .arg(
             Arg::with_name("debug")
                 .help("Prints extra debugging information")
                 .long("debug")
@@ -60,6 +52,12 @@ fn main() -> Result<()> {
                         .long("max-playable")
                         .takes_value(true)
                         .default_value("6"),
+                )
+                .arg(
+                    Arg::with_name("update")
+                        .help("Update YouTube")
+                        .takes_value(false)
+                        .long("update"),
                 ),
         )
         .get_matches();
@@ -67,6 +65,7 @@ fn main() -> Result<()> {
     let mut sort = false;
     let mut prune = false;
     let mut max_playable = 6;
+    let mut dry_run = true;
 
     match matches.subcommand() {
         (_, Some(sub_matches)) => {
@@ -78,6 +77,7 @@ fn main() -> Result<()> {
                 .parse::<usize>()
                 .unwrap();
             prune = sub_matches.is_present("prune");
+            dry_run = !sub_matches.is_present("update");
         }
         _ => {}
     }
@@ -91,7 +91,7 @@ fn main() -> Result<()> {
             matches.value_of("playlist_id").unwrap().to_owned(),
             matches.value_of("client").unwrap().to_string(),
             matches.value_of("timezone").unwrap().to_string(),
-            FromStr::from_str(matches.value_of("dry-run").unwrap()).unwrap_or(true),
+            dry_run,
             matches.is_present("debug"),
             sort,
             prune,
@@ -129,7 +129,7 @@ async fn async_main(
 
     let play_list = youtube_manager::playlist::new(hub, &playlist, timezone, dry_run, debug);
 
-    if !sort {
+    if sort {
         eprintln!("Input playlist:");
     }
     play_list.print().await?;
@@ -142,18 +142,16 @@ async fn async_main(
             eprintln!("\nSorting...");
             play_list.sort().await?;
         }
-    }
 
-    if !dry_run {
-        if sort {
+        if !dry_run {
             eprintln!("Done.");
             eprintln!("\nOutput playlist:");
             play_list.print().await?;
+        } else {
+            eprintln!(
+                "\nThis was only a dry run. To make changes to the YouTube playlist, repeat the command and add --update."
+            );
         }
-    } else {
-        eprintln!(
-            "\nThis was a dry run. To enable changes to the YouTube playlist, use --dry-run=false"
-        );
     }
 
     Ok(())

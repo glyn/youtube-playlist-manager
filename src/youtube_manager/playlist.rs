@@ -334,10 +334,7 @@ async fn prune_and_log_item(hub: &YouTube, i: &Item, reason: String, dry_run: bo
         eprintln!("Removing {} video from playlist: {}", reason, i);
         prune_item(&hub, &i.playlist_item_id).await?;
     } else {
-        eprintln!(
-            "Non-dry run would remove {} video from playlist: {}",
-            reason, i
-        );
+        eprintln!("Video {} would be removed from playlist: {}", reason, i);
     }
     Ok(())
 }
