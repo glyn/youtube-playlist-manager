@@ -18,11 +18,11 @@ fn main() -> Result<()> {
                 .required(true),
         )
         .arg(
-            Arg::with_name("secret")
-                .help("Path to YouTube client secret file")
-                .long_help("Path to YouTube client secret file. See https://github.com/glyn/stream-inspector for how to create this.")
+            Arg::with_name("client")
+                .help("Path to YouTube client id file")
+                .long_help("Path to YouTube client id file. See https://github.com/glyn/stream-inspector for how to create this.")
                 .takes_value(true)
-                .long("secret")
+                .long("client")
                 .required(true),
         )
         .arg(
@@ -89,7 +89,7 @@ fn main() -> Result<()> {
         .unwrap()
         .block_on(async_main(
             matches.value_of("playlist_id").unwrap().to_owned(),
-            matches.value_of("secret").unwrap().to_string(),
+            matches.value_of("client").unwrap().to_string(),
             matches.value_of("timezone").unwrap().to_string(),
             FromStr::from_str(matches.value_of("dry-run").unwrap()).unwrap_or(true),
             matches.is_present("debug"),
@@ -101,7 +101,7 @@ fn main() -> Result<()> {
 
 async fn async_main(
     playlist: String,
-    secret_path: String,
+    client_id_path: String,
     timezone: String,
     dry_run: bool,
     debug: bool,
@@ -109,17 +109,18 @@ async fn async_main(
     prune: bool,
     max_catch_up: usize,
 ) -> Result<()> {
-    let secret = read_application_secret(secret_path).await.unwrap();
+    let client_id = read_application_secret(client_id_path).await.unwrap();
 
     // Create an authenticator that uses an InstalledFlow to authenticate. The
     // authentication tokens are persisted to a file. The
     // authenticator takes care of caching tokens to disk and refreshing tokens once
     // they've expired.
-    let auth = InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect)
-        .persist_tokens_to_disk("api_inspector_tokencache.json")
-        .build()
-        .await
-        .unwrap();
+    let auth =
+        InstalledFlowAuthenticator::builder(client_id, InstalledFlowReturnMethod::HTTPRedirect)
+            .persist_tokens_to_disk("api_inspector_tokencache.json")
+            .build()
+            .await
+            .unwrap();
 
     let hub = YouTube::new(
         hyper::Client::builder().build(hyper_rustls::HttpsConnector::with_native_roots()),
