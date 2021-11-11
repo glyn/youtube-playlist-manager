@@ -1,14 +1,37 @@
 mod youtube_manager;
 
 use clap::{App, Arg, SubCommand};
-use google_youtube3::{Result, YouTube};
+use google_youtube3::YouTube;
 use hyper;
 use hyper_rustls;
 use tokio;
 use youtube_manager::playlist::Playlist;
 use yup_oauth2::{read_application_secret, InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 
-fn main() -> Result<()> {
+use druid::widget::{Button, Flex, Label};
+use druid::{AppLauncher, LocalizedString, PlatformError, Widget, WidgetExt, WindowDesc};
+
+fn main() -> Result<(), PlatformError> {
+    let main_window = WindowDesc::new(ui_builder);
+    let data = 0_u32;
+    AppLauncher::with_window(main_window)
+        .use_simple_logger()
+        .launch(data)
+}
+
+fn ui_builder() -> impl Widget<u32> {
+    // The label text will be computed dynamically based on the current locale and count
+    let text =
+        LocalizedString::new("hello-counter").with_arg("count", |data: &u32, _env| (*data).into());
+    let label = Label::new(text).padding(5.0).center();
+    let button = Button::new("increment")
+        .on_click(|_ctx, data, _env| *data += 1)
+        .padding(5.0);
+
+    Flex::column().with_child(label).with_child(button)
+}
+
+/*fn main() -> Result<()> {
     let matches = App::new("stream-inspector")
         .arg(
             Arg::with_name("playlist_id")
@@ -97,7 +120,7 @@ fn main() -> Result<()> {
             prune,
             max_playable,
         ))
-}
+}*/
 
 async fn async_main(
     playlist: String,
@@ -108,7 +131,7 @@ async fn async_main(
     sort: bool,
     prune: bool,
     max_catch_up: usize,
-) -> Result<()> {
+) -> google_youtube3::Result<()> {
     let client_id = read_application_secret(client_id_path).await.unwrap();
 
     // Create an authenticator that uses an InstalledFlow to authenticate. The
