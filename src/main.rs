@@ -1,6 +1,7 @@
 mod youtube_manager;
 
 use clap::{App, Arg, SubCommand};
+use env_logger;
 use google_youtube3::{Result, YouTube};
 use hyper;
 use hyper_rustls;
@@ -9,6 +10,7 @@ use youtube_manager::playlist::Playlist;
 use yup_oauth2::{read_application_secret, InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 
 fn main() -> Result<()> {
+    env_logger::init();
     let matches = App::new("stream-inspector")
         .arg(
             Arg::with_name("playlist_id")
