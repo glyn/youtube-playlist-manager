@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use google_youtube3::{
     api::Scope,
@@ -15,22 +15,23 @@ pub struct Item {
     pub video_id: String,
     playlist_item_id: String,
     pub title: String,
-    pub scheduled_start_time: Option<DateTime<Tz>>,
-    pub actual_start_time: Option<DateTime<Tz>>,
-    pub published_at: Option<DateTime<Tz>>,
+    pub scheduled_start_time: Option<DateTime<Utc>>,
+    pub actual_start_time: Option<DateTime<Utc>>,
+    pub published_at: Option<DateTime<Utc>>,
     pub blocked: bool,
+    timezone: Option<Tz>,
 }
 
 pub trait ItemProperties {
     /// viewable videos are either streamed or uploaded, but not blocked
     fn viewable(self: &Self) -> bool;
 
-    fn viewable_time(self: &Self) -> Option<DateTime<Tz>>;
+    fn viewable_time(self: &Self) -> Option<DateTime<Utc>>;
 
     /// available videos are either streamed or uploaded and may be blocked
     fn available(self: &Self) -> bool;
 
-    fn available_time(self: &Self) -> Option<DateTime<Tz>>;
+    fn available_time(self: &Self) -> Option<DateTime<Utc>>;
 }
 
 impl ItemProperties for Item {
@@ -38,7 +39,7 @@ impl ItemProperties for Item {
         self.viewable_time().is_some()
     }
 
-    fn viewable_time(self: &Self) -> Option<DateTime<Tz>> {
+    fn viewable_time(self: &Self) -> Option<DateTime<Utc>> {
         if self.blocked {
             None
         } else {
@@ -50,7 +51,7 @@ impl ItemProperties for Item {
         self.available_time().is_some()
     }
 
-    fn available_time(self: &Self) -> Option<DateTime<Tz>> {
+    fn available_time(self: &Self) -> Option<DateTime<Utc>> {
         if self.actual_start_time.is_some() {
             // streamed videos have an actual start time
             self.actual_start_time
@@ -86,7 +87,13 @@ impl Pruning for Item {
 
 impl fmt::Display for Item {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {} {}", self.video_id, self.title, time(&self))
+        write!(
+            f,
+            "{}: {} {}",
+            self.video_id,
+            self.title,
+            time(&self, self.timezone)
+        )
     }
 }
 
@@ -115,26 +122,31 @@ struct PlaylistImpl {
     id: String,
     dry_run: bool,
     debug: bool,
-    timezone: Tz,
+    timezone: Option<Tz>,
 }
 
 /// new constructs a Playlist trait implementation for manipulating the playlist with the given playlist id.
 /// If dry-run is true, information will be printed out but the playlist will not be updated on YouTube.
 /// Debugging information is printed if and only if debug is true.
 pub fn new(hub: YouTube, id: &str, time_zone: String, dry_run: bool, debug: bool) -> impl Playlist {
-    let tz: Tz = match time_zone.parse() {
-        Ok(v) => v,
-        Err(e) => {
-            panic!("Invalid timezone: {}", e);
-        }
-    };
+    let optional_timezone;
+    if time_zone == "" {
+        optional_timezone = None;
+    } else {
+        optional_timezone = match time_zone.parse() {
+            Ok(v) => Some(v), // there is probably a neater way of doing this
+            Err(e) => {
+                panic!("Invalid timezone: {}", e);
+            }
+        };
+    }
 
     PlaylistImpl {
         hub: hub,
         id: id.to_owned(),
         dry_run: dry_run,
         debug: debug,
-        timezone: tz,
+        timezone: optional_timezone,
     }
 }
 
@@ -181,9 +193,10 @@ impl Playlist for PlaylistImpl {
                             |d| {
                                 DateTime::parse_from_rfc3339(&d)
                                     .unwrap()
-                                    .with_timezone(&self.timezone)
+                                    .with_timezone(&Utc)
                             },
                         ),
+                        timezone: self.timezone,
                         ..Default::default()
                     };
 
@@ -196,12 +209,12 @@ impl Playlist for PlaylistImpl {
                         it.scheduled_start_time = details.scheduled_start_time.as_ref().map(|d| {
                             DateTime::parse_from_rfc3339(&d)
                                 .unwrap()
-                                .with_timezone(&self.timezone)
+                                .with_timezone(&Utc)
                         });
                         it.actual_start_time = details.actual_start_time.as_ref().map(|d| {
                             DateTime::parse_from_rfc3339(&d)
                                 .unwrap()
-                                .with_timezone(&self.timezone)
+                                .with_timezone(&Utc)
                         });
                     }
                     if let Some(content_details) = videos.get(0).unwrap().content_details.as_ref() {
@@ -298,7 +311,19 @@ fn print(items: Vec<Item>) -> Result<()> {
     Ok(())
 }
 
-fn time(video: &Item) -> String {
+fn format_time(t: Option<DateTime<Utc>>, tz: Option<Tz>) -> String {
+    let t = t.unwrap();
+
+    if let Some(time_zone) = tz {
+        // convert to timezone
+        t.with_timezone(&time_zone).to_rfc2822()
+    } else {
+        // convert to local time
+        t.with_timezone(&chrono::Local).to_rfc2822()
+    }
+}
+
+fn time(video: &Item, timezone: Option<Tz>) -> String {
     if video.viewable() {
         format!(
             "{} on {}",
@@ -307,7 +332,7 @@ fn time(video: &Item) -> String {
             } else {
                 "uploaded"
             },
-            video.viewable_time().unwrap().to_rfc2822()
+            format_time(video.viewable_time(), timezone)
         )
     } else if video.available() {
         format!(
@@ -317,12 +342,12 @@ fn time(video: &Item) -> String {
             } else {
                 "uploaded"
             },
-            video.available_time().unwrap().to_rfc2822()
+            format_time(video.available_time(), timezone)
         )
     } else if video.scheduled_start_time.is_some() {
         format!(
             "scheduled for {}",
-            video.scheduled_start_time.unwrap().to_rfc2822()
+            format_time(video.scheduled_start_time, timezone)
         )
     } else {
         "invalid".to_string()
@@ -532,7 +557,7 @@ mod tests {
         i.scheduled_start_time = Some(
             DateTime::parse_from_rfc3339(&format!("2021-09-30T10:55:0{}+01:00", n))
                 .unwrap()
-                .with_timezone(&chrono_tz::UTC),
+                .with_timezone(&Utc),
         );
         (i, "scheduled item")
     }
@@ -542,7 +567,7 @@ mod tests {
         i.actual_start_time = Some(
             DateTime::parse_from_rfc3339(&format!("2021-09-30T10:56:0{}+01:00", n))
                 .unwrap()
-                .with_timezone(&chrono_tz::UTC),
+                .with_timezone(&Utc),
         );
         (i, "streamed item")
     }
@@ -556,7 +581,7 @@ mod tests {
         i.published_at = Some(
             DateTime::parse_from_rfc3339(&format!("2021-09-30T10:56:0{}+01:00", n))
                 .unwrap()
-                .with_timezone(&chrono_tz::UTC),
+                .with_timezone(&Utc),
         );
         i
     }

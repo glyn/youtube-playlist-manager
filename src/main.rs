@@ -28,10 +28,10 @@ fn main() -> Result<()> {
         )
         .arg(
             Arg::with_name("timezone")
-                .help("A timezone for displaying dates and times, e.g. Europe/London")
+                .help("A timezone for displaying dates and times, e.g. Europe/London or UTC")
                 .takes_value(true)
                 .long("timezone")
-                .default_value("UTC"),
+                .default_value(""),
         )
         .arg(
             Arg::with_name("debug")
