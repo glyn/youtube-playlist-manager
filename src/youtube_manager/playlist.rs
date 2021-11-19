@@ -17,7 +17,7 @@ pub struct Item {
     pub title: String,
     pub scheduled_start_time: Option<DateTime<Utc>>,
     pub actual_start_time: Option<DateTime<Utc>>,
-    pub published_at: Option<DateTime<Utc>>,
+    pub video_published_at: Option<DateTime<Utc>>,
     pub blocked: bool,
     timezone: Option<Tz>,
 }
@@ -55,12 +55,12 @@ impl ItemProperties for Item {
         if self.actual_start_time.is_some() {
             // streamed videos have an actual start time
             self.actual_start_time
-        } else if self.published_at.is_some()
+        } else if self.video_published_at.is_some()
             && self.actual_start_time.is_none()
             && self.scheduled_start_time.is_none()
         {
             // uploaded videos have a published time, but not an actual or scheduled start time
-            self.published_at
+            self.video_published_at
         } else {
             None
         }
@@ -77,8 +77,8 @@ impl Pruning for Item {
     fn prune(self: &Item) -> Option<String> {
         if self.blocked {
             Some("blocked".to_string())
-        } else if self.scheduled_start_time.is_none() && self.published_at.is_none() {
-            Some("unscheduled and unpublished".to_string())
+        } else if self.scheduled_start_time.is_none() && self.video_published_at.is_none() {
+            Some("unscheduled and unpublished or deleted".to_string())
         } else {
             None
         }
@@ -177,28 +177,31 @@ impl Playlist for PlaylistImpl {
                     .doit()
                     .await?;
 
-                let mut it =
-                    Item {
-                        video_id: video_id.to_owned(),
-                        playlist_item_id: item.id.as_ref().unwrap().to_owned(),
-                        title: item
-                            .snippet
-                            .as_ref()
-                            .unwrap()
-                            .title
-                            .as_ref()
-                            .unwrap()
-                            .to_owned(),
-                        published_at: item.snippet.as_ref().unwrap().published_at.as_ref().map(
-                            |d| {
-                                DateTime::parse_from_rfc3339(&d)
-                                    .unwrap()
-                                    .with_timezone(&Utc)
-                            },
-                        ),
-                        timezone: self.timezone,
-                        ..Default::default()
-                    };
+                let mut it = Item {
+                    video_id: video_id.to_owned(),
+                    playlist_item_id: item.id.as_ref().unwrap().to_owned(),
+                    title: item
+                        .snippet
+                        .as_ref()
+                        .unwrap()
+                        .title
+                        .as_ref()
+                        .unwrap()
+                        .to_owned(),
+                    video_published_at: item
+                        .content_details
+                        .as_ref()
+                        .unwrap()
+                        .video_published_at
+                        .as_ref()
+                        .map(|d| {
+                            DateTime::parse_from_rfc3339(&d)
+                                .unwrap()
+                                .with_timezone(&Utc)
+                        }),
+                    timezone: self.timezone,
+                    ..Default::default()
+                };
 
                 let videos = v.items.unwrap();
 
@@ -394,8 +397,22 @@ async fn playlist_items(
 
 fn sort_items(items: &mut Vec<Item>) {
     items.sort_by(|v, w| {
-        // println!("v: {:?}\nw: {:?}", v, w);
-        if v.viewable() {
+        //println!("v: {:?}\nw: {:?}", v, w);
+        if v.blocked {
+            if w.blocked {
+                // Order blocked items reverse chronologically
+                v.available_time()
+                    .unwrap()
+                    .cmp(&w.available_time().unwrap())
+                    .reverse()
+            } else {
+                // Order unblocked items before blocked items
+                Ordering::Greater
+            }
+        } else if w.blocked {
+            // Order unblocked items before blocked items
+            Ordering::Less
+        } else if v.viewable() {
             if w.viewable() {
                 // Order viewable items in reverse chronological order
                 v.viewable_time()
@@ -487,6 +504,22 @@ mod tests {
         sort_reverse_chronologically(new_blocked_item);
     }
 
+    #[test]
+    fn sort_streamed_and_uploaded_items_reverse_chronologically() {
+        sort_reverse_chronologically(new_streamed_item_then_uploaded_item);
+    }
+
+    fn new_streamed_item_then_uploaded_item(n: u32) -> (Item, &'static str) {
+        (
+            if n == 1 {
+                new_streamed_item(n).0
+            } else {
+                new_uploaded_item(n).0
+            },
+            "streamed and uploaded items",
+        )
+    }
+
     fn sort_reverse_chronologically(f: fn(u32) -> (Item, &'static str)) {
         let message = format!("{} not sorted reverse chronologically", f(0).1);
         let mut v = vec![f(1).0, f(2).0];
@@ -550,6 +583,7 @@ mod tests {
 
         assert!(new_blocked_item(1).0.prune().is_some());
         assert!(new_invalid_item(1).0.prune().is_some());
+        assert!(new_deleted_item(1).0.prune().is_some());
     }
 
     fn new_scheduled_item(n: u32) -> (Item, &'static str) {
@@ -563,7 +597,7 @@ mod tests {
     }
 
     fn new_streamed_item(n: u32) -> (Item, &'static str) {
-        let mut i = new_published_item(n);
+        let (mut i, _) = new_scheduled_item(n);
         i.actual_start_time = Some(
             DateTime::parse_from_rfc3339(&format!("2021-09-30T10:56:0{}+01:00", n))
                 .unwrap()
@@ -576,9 +610,13 @@ mod tests {
         (new_published_item(n), "uploaded item")
     }
 
+    fn new_deleted_item(n: u32) -> (Item, &'static str) {
+        (new_item(n), "deleted item")
+    }
+
     fn new_published_item(n: u32) -> Item {
         let mut i = new_item(n);
-        i.published_at = Some(
+        i.video_published_at = Some(
             DateTime::parse_from_rfc3339(&format!("2021-09-30T10:56:0{}+01:00", n))
                 .unwrap()
                 .with_timezone(&Utc),
