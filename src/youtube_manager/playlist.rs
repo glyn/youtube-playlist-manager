@@ -188,17 +188,13 @@ impl Playlist for PlaylistImpl {
                         .as_ref()
                         .unwrap()
                         .to_owned(),
-                    video_published_at: item
-                        .content_details
-                        .as_ref()
-                        .unwrap()
-                        .video_published_at
-                        .as_ref()
-                        .map(|d| {
-                            DateTime::parse_from_rfc3339(&d)
-                                .unwrap()
-                                .with_timezone(&Utc)
-                        }),
+                    video_published_at: parse_optional_time(
+                        item.content_details
+                            .as_ref()
+                            .unwrap()
+                            .video_published_at
+                            .as_ref(),
+                    ),
                     timezone: self.timezone,
                     ..Default::default()
                 };
@@ -209,16 +205,10 @@ impl Playlist for PlaylistImpl {
                     let live_streaming_details =
                         videos.get(0).unwrap().live_streaming_details.as_ref();
                     if let Some(details) = live_streaming_details {
-                        it.scheduled_start_time = details.scheduled_start_time.as_ref().map(|d| {
-                            DateTime::parse_from_rfc3339(&d)
-                                .unwrap()
-                                .with_timezone(&Utc)
-                        });
-                        it.actual_start_time = details.actual_start_time.as_ref().map(|d| {
-                            DateTime::parse_from_rfc3339(&d)
-                                .unwrap()
-                                .with_timezone(&Utc)
-                        });
+                        it.scheduled_start_time =
+                            parse_optional_time(details.scheduled_start_time.as_ref());
+                        it.actual_start_time =
+                            parse_optional_time(details.actual_start_time.as_ref());
                     }
                     if let Some(content_details) = videos.get(0).unwrap().content_details.as_ref() {
                         if let Some(restriction) = content_details.region_restriction.as_ref() {
@@ -305,6 +295,14 @@ impl Playlist for PlaylistImpl {
     async fn print(self: &Self) -> Result<()> {
         print(self.items().await?)
     }
+}
+
+fn parse_optional_time(t: Option<&String>) -> Option<DateTime<Utc>> {
+    t.as_ref().map(|d: &&String| {
+        DateTime::parse_from_rfc3339(&d)
+            .unwrap()
+            .with_timezone(&Utc)
+    })
 }
 
 fn print(items: Vec<Item>) -> Result<()> {
@@ -466,6 +464,18 @@ mod tests {
     use super::*;
 
     #[test]
+    // Since the tests reuse parse_optional_time, we'd better test it!
+    fn test_parse_optional_time() {
+        assert_eq!(parse_optional_time(None), None);
+
+        if let Some(t) = parse_optional_time(Some(&format!("2021-09-30T10:56:07+01:00"))) {
+            assert_eq!(t.to_rfc3339(), "2021-09-30T09:56:07+00:00");
+        } else {
+            assert!(false, "failed to produce Some(t)");
+        }
+    }
+
+    #[test]
     fn sort_items_empty() {
         let mut v = vec![];
         sort_items(&mut v);
@@ -588,21 +598,14 @@ mod tests {
 
     fn new_scheduled_item(n: u32) -> (Item, &'static str) {
         let mut i = new_item(n);
-        i.scheduled_start_time = Some(
-            DateTime::parse_from_rfc3339(&format!("2021-09-30T10:55:0{}+01:00", n))
-                .unwrap()
-                .with_timezone(&Utc),
-        );
+        i.scheduled_start_time =
+            parse_optional_time(Some(&format!("2021-09-30T10:55:0{}+01:00", n)));
         (i, "scheduled item")
     }
 
     fn new_streamed_item(n: u32) -> (Item, &'static str) {
         let (mut i, _) = new_scheduled_item(n);
-        i.actual_start_time = Some(
-            DateTime::parse_from_rfc3339(&format!("2021-09-30T10:56:0{}+01:00", n))
-                .unwrap()
-                .with_timezone(&Utc),
-        );
+        i.actual_start_time = parse_optional_time(Some(&format!("2021-09-30T10:56:0{}+01:00", n)));
         (i, "streamed item")
     }
 
@@ -616,11 +619,7 @@ mod tests {
 
     fn new_published_item(n: u32) -> Item {
         let mut i = new_item(n);
-        i.video_published_at = Some(
-            DateTime::parse_from_rfc3339(&format!("2021-09-30T10:56:0{}+01:00", n))
-                .unwrap()
-                .with_timezone(&Utc),
-        );
+        i.video_published_at = parse_optional_time(Some(&format!("2021-09-30T10:56:0{}+01:00", n)));
         i
     }
 
