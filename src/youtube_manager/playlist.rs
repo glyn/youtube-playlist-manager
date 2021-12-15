@@ -8,6 +8,7 @@ use google_youtube3::{
     YouTube,
 };
 use hyper::Response;
+use log::debug;
 use std::{cmp::Ordering, fmt};
 
 #[derive(Default, Clone, PartialEq, Debug)]
@@ -379,6 +380,7 @@ async fn playlist_items(
     playlist_id: &str,
     next_page_token: &Option<String>,
 ) -> Result<(Response<hyper::body::Body>, PlaylistItemListResponse)> {
+    debug!("listing playlist items");
     let mut req = hub
         .playlist_items()
         .list(&vec![

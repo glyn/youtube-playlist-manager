@@ -2,15 +2,20 @@ mod youtube_manager;
 
 use clap::{App, Arg, SubCommand};
 use env_logger;
+use env_logger::Logger;
 use google_youtube3::{Result, YouTube};
 use hyper;
 use hyper_rustls;
+use log::debug;
 use tokio;
 use youtube_manager::playlist::Playlist;
 use yup_oauth2::{read_application_secret, InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 
 fn main() -> Result<()> {
-    env_logger::init();
+    let logger = Logger::from_default_env();
+    async_log::Logger::wrap(logger, || 12)
+        .start(log::LevelFilter::Trace)
+        .unwrap();
     let matches = App::new("stream-inspector")
         .arg(
             Arg::with_name("playlist_id")
@@ -117,12 +122,14 @@ async fn async_main(
     // authentication tokens are persisted to a file. The
     // authenticator takes care of caching tokens to disk and refreshing tokens once
     // they've expired.
+    debug!("building installed flow authenticator");
     let auth =
         InstalledFlowAuthenticator::builder(client_id, InstalledFlowReturnMethod::HTTPRedirect)
             .persist_tokens_to_disk("api_inspector_tokencache.json")
             .build()
             .await
             .unwrap();
+    debug!("installed flow authenticator built successfully");
 
     let hub = YouTube::new(
         hyper::Client::builder().build(hyper_rustls::HttpsConnector::with_native_roots()),
@@ -157,4 +164,29 @@ async fn async_main(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_async_main() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_io()
+            .enable_time()
+            .build()
+            .unwrap()
+            .block_on(async_main(
+                "PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC".to_owned(),
+                "/home/glyn/Dropbox/stream-inspector-client.json".to_owned(),
+                "".to_owned(),
+                true,
+                true,
+                true,
+                true,
+                6,
+            ))
+            .unwrap();
+    }
 }
