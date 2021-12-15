@@ -19,3 +19,6 @@ mime = "0.3.16"
 serde = "1.0.130"
 tokio = "1.12.0"
 yup-oauth2 = "5.1.0"
+
+[patch.crates-io]
+yup-oauth2 = { git = "https://github.com/glyn/yup-oauth2.git", branch = "163-inner-flow-after-failed-refresh-v5.1.0" }

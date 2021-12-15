@@ -1432,8 +1432,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 [[package]]
 name = "yup-oauth2"
 version = "5.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2573621fa28865489bdf556cdb8703604f4e8498612e3041a212ac20e59c4aeb"
+source = "git+https://github.com/glyn/yup-oauth2.git?branch=163-inner-flow-after-failed-refresh-v5.1.0#3db6c2e7c7176b7740a5ab14611a1b154be2e152"
 dependencies = [
  "base64",
  "chrono",
