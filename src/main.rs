@@ -165,3 +165,28 @@ async fn async_main(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_async_main() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_io()
+            .enable_time()
+            .build()
+            .unwrap()
+            .block_on(async_main(
+                "PLz-8ZbAJhahjvkPtduhnB4TzhVcj5ZtfC".to_owned(),
+                "/home/glyn/Dropbox/stream-inspector-client.json".to_owned(),
+                "".to_owned(),
+                true,
+                true,
+                true,
+                true,
+                6,
+            ))
+            .unwrap();
+    }
+}
