@@ -16,7 +16,7 @@ fn main() -> Result<()> {
     async_log::Logger::wrap(logger, || 12)
         .start(log::LevelFilter::Trace)
         .unwrap();
-    let matches = App::new("stream-inspector")
+    let matches = App::new("playlist-manager")
         .arg(
             Arg::with_name("playlist_id")
                 .help("A playlist id")
@@ -26,7 +26,7 @@ fn main() -> Result<()> {
         .arg(
             Arg::with_name("client")
                 .help("Path to YouTube client id file")
-                .long_help("Path to YouTube client id file. See https://github.com/glyn/stream-inspector for how to create this.")
+                .long_help("Path to YouTube client id file. See https://github.com/glyn/youtube-playlist-manager for how to create this.")
                 .takes_value(true)
                 .long("client")
                 .required(true),
@@ -125,7 +125,7 @@ async fn async_main(
     debug!("building installed flow authenticator");
     let auth =
         InstalledFlowAuthenticator::builder(client_id, InstalledFlowReturnMethod::HTTPRedirect)
-            .persist_tokens_to_disk("api_inspector_tokencache.json")
+            .persist_tokens_to_disk("playlist-manager-tokencache.json")
             .build()
             .await
             .unwrap();

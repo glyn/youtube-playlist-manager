@@ -1,6 +1,6 @@
 [package]
-name = "stream-inspector"
-version = "0.1.0"
+name = "youtube-playlist-manager"
+version = "0.0.5"
 edition = "2018"
 
 [dependencies]

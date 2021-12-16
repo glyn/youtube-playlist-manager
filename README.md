@@ -1,4 +1,4 @@
-# YouTube stream inspector
+# YouTube playlist manager
 
 Work in progress!
 
