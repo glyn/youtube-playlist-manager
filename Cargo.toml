@@ -1,5 +1,5 @@
 [package]
-name = "youtube-playlist-manager"
+name = "playlist-manager"
 version = "0.0.4"
 edition = "2018"
 
