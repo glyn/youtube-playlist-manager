@@ -1,6 +1,6 @@
 # YouTube playlist manager
 
-Work in progress!
+You can use this command line application to manage a YouTube playlist, print out its contents, sort it into a reasonable order, and remove unwanted entries.
 
 ## Authentication and authorisation
 
@@ -20,8 +20,10 @@ Steps:
 
 ## Command line interface
 
-WIP, but you can run the code like this:
+Run the code like this:
 
-cargo run -- &lt;playlist-id&gt; --client=/path/to/client_id.json
+```
+playlist-manager <playlist-id> --client=/path/to/client_id.json
+```
 
 Use `--help` for more information.
