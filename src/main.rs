@@ -7,9 +7,17 @@ use google_youtube3::{Result, YouTube};
 use hyper;
 use hyper_rustls;
 use log::debug;
+use std::future::Future;
+use std::pin::Pin;
 use tokio;
+use webbrowser;
 use youtube_manager::playlist::Playlist;
-use yup_oauth2::{read_application_secret, InstalledFlowAuthenticator, InstalledFlowReturnMethod};
+use yup_oauth2::{
+    authenticator_delegate::InstalledFlowDelegate, read_application_secret,
+    InstalledFlowAuthenticator, InstalledFlowReturnMethod,
+};
+
+const DELAY: u64 = 5;
 
 fn main() -> Result<()> {
     let logger = Logger::from_default_env();
@@ -121,10 +129,11 @@ async fn async_main(
     // Create an authenticator that uses an InstalledFlow to authenticate. The
     // authentication tokens are persisted to a file. The
     // authenticator takes care of caching tokens to disk and refreshing tokens once
-    // they've expired.
+    // they've expired. Use a custom flow delegate to launch a browser automatically.
     debug!("building installed flow authenticator");
     let auth =
         InstalledFlowAuthenticator::builder(client_id, InstalledFlowReturnMethod::HTTPRedirect)
+            .flow_delegate(Box::new(CustomInstalledFlowDelegate))
             .persist_tokens_to_disk("playlist-manager-tokencache.json")
             .build()
             .await
@@ -164,4 +173,50 @@ async fn async_main(
     }
 
     Ok(())
+}
+
+#[derive(Copy, Clone)]
+pub struct CustomInstalledFlowDelegate;
+impl InstalledFlowDelegate for CustomInstalledFlowDelegate {
+    fn present_user_url<'a>(
+        &'a self,
+        url: &'a str,
+        need_code: bool,
+    ) -> Pin<Box<dyn Future<Output = core::result::Result<String, String>> + Send + 'a>> {
+        Box::pin(present_user_url(url, need_code))
+    }
+}
+
+async fn present_user_url(url: &str, need_code: bool) -> core::result::Result<String, String> {
+    use tokio::io::AsyncBufReadExt;
+    if need_code {
+        println!(
+            "Launching a browser.\n\n(If a browser does not appear, please copy this link into a browser's address bar and press return: {})\n\nFollow the instructions displayed in the browser and enter the code displayed here: ",
+            url
+        );
+        launch_browser(url).await?;
+        let mut user_input = String::new();
+        tokio::io::BufReader::new(tokio::io::stdin())
+            .read_line(&mut user_input)
+            .await
+            .map_err(|e| format!("couldn't read code: {}", e))?;
+        // remove trailing whitespace.
+        user_input.truncate(user_input.trim_end().len());
+        Ok(user_input)
+    } else {
+        println!(
+            "Launching a browser.\n\n(If a browser does not appear, please copy this link into a browser's address bar and press return: {})\n\nFollow the instructions displayed in the browser.",
+            url
+        );
+        launch_browser(url).await
+    }
+}
+
+async fn launch_browser(url: &str) -> core::result::Result<String, String> {
+    std::thread::sleep(std::time::Duration::from_secs(DELAY));
+    if let Err(err) = webbrowser::open(url) {
+        std::result::Result::Err(err.to_string())
+    } else {
+        Ok(String::new())
+    }
 }
