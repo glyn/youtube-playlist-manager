@@ -10,6 +10,7 @@ use log::debug;
 use std::future::Future;
 use std::pin::Pin;
 use tokio;
+use tokio::io::AsyncBufReadExt;
 use webbrowser;
 use youtube_manager::playlist::Playlist;
 use yup_oauth2::{
@@ -50,6 +51,11 @@ fn main() -> Result<()> {
             Arg::with_name("debug")
                 .help("Prints extra debugging information")
                 .long("debug")
+                .takes_value(false),
+        ).arg(
+            Arg::with_name("pause")
+                .help("pause for user input before terminating")
+                .long("pause")
                 .takes_value(false),
         )
         .subcommand(
@@ -108,6 +114,7 @@ fn main() -> Result<()> {
             matches.value_of("timezone").unwrap().to_string(),
             dry_run,
             matches.is_present("debug"),
+            matches.is_present("pause"),
             sort,
             prune,
             max_playable,
@@ -120,6 +127,7 @@ async fn async_main(
     timezone: String,
     dry_run: bool,
     debug: bool,
+    pause: bool,
     sort: bool,
     prune: bool,
     max_catch_up: usize,
@@ -172,6 +180,14 @@ async fn async_main(
         }
     }
 
+    if pause {
+        println!("\nCommand complete, press return to exit...");
+        let mut user_input = String::new();
+        tokio::io::BufReader::new(tokio::io::stdin())
+            .read_line(&mut user_input)
+            .await?;
+    }
+
     Ok(())
 }
 
@@ -188,7 +204,6 @@ impl InstalledFlowDelegate for CustomInstalledFlowDelegate {
 }
 
 async fn present_user_url(url: &str, need_code: bool) -> core::result::Result<String, String> {
-    use tokio::io::AsyncBufReadExt;
     if need_code {
         println!(
             "Launching a browser.\n\n(If a browser does not appear, please copy this link into a browser's address bar and press return: {})\n\nFollow the instructions displayed in the browser and enter the code displayed here: ",
