@@ -7,7 +7,7 @@ The application is intended for use with a YouTube playlist which contains both 
 Removing unwanted entries removes older streamed videos leaving at most a given number present. It also removes invalid videos, such as any which have been deleted.
 
 When you run the application, it will occasionally launch a web browser to gain the necessary authorisation to access or modify the playlist. Choose a suitable account and follow the instructions in the browser to give the application
-permission. Note that the browser will be launched once to read the playlist and again to modify the playlist. The permissions will be cached on disk and reused, but may expire, in which case the application will launch the web browse again. To make all this possible, you need to create and download a client ID file, as described in the next section.
+permission. Note that the browser will be launched once to read the playlist and again to modify the playlist. The permissions will be cached on disk and reused, but may expire, in which case the application will launch the web browser again. To make all this possible, you need to create and download a client ID file, as described in the next section.
 
 ## Authentication and authorisation
 
