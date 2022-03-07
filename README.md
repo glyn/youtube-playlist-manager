@@ -1,6 +1,6 @@
 # YouTube playlist manager
 
-**Note: this application is nl longer needed for its original purpose since we switched to using a YouTube channel as our
+**Note: this application is no longer needed for its original purpose since we switched to using a YouTube channel as our
 main user interface. We no longer need to sort or maintain a playlist for catch-up purposes. Therefore this repository will be archived.**
 
 You can use this command line application to manage a YouTube playlist, print out its contents, sort it into a reasonable order, and remove unwanted entries.
