@@ -1,5 +1,8 @@
 # YouTube playlist manager
 
+**Note: this application is nl longer needed for its original purpose since we switched to using a YouTube channel as our
+main user interface. We no longer need to sort or maintain a playlist for catch-up purposes. Therefore this repository will be archived.**
+
 You can use this command line application to manage a YouTube playlist, print out its contents, sort it into a reasonable order, and remove unwanted entries.
 
 The application is intended for use with a YouTube playlist which contains both streamed videos and scheduled streams. Sorting the playlist will move all the streamed videos to the top, in reverse chronological order (newest first). This makes it simple for the audience to "catch up" with the latest video in the playlist. If a new stream is created from an existing video in the playlist, the new stream is added to the same playlist, which can then be sorted if necessary using this application.
